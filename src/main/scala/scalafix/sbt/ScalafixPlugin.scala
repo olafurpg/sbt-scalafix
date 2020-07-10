@@ -43,13 +43,6 @@ object ScalafixPlugin extends AutoPlugin {
           "When invoked directly, prior compilation will be triggered for semantic rules."
       )
 
-    val scalafixOnCompile: SettingKey[Boolean] =
-      settingKey[Boolean](
-        "Run Scalafix rule(s) declared in .scalafix.conf on compilation and fail on lint errors. " +
-          "Off by default. When enabled, caching will be automatically activated, " +
-          "but can be disabled with `scalafixCaching := false`."
-      )
-
     val scalafixCaching: SettingKey[Boolean] =
       settingKey[Boolean](
         "Cache scalafix invocations (off by default, on if scalafixOnCompile := true)."
@@ -97,17 +90,6 @@ object ScalafixPlugin extends AutoPlugin {
     def scalafixConfigSettings(config: Configuration): Seq[Def.Setting[_]] =
       Seq(
         scalafix := scalafixInputTask(config).evaluated,
-        compile := Def.taskDyn {
-          val oldCompile =
-            compile.value // evaluated first, before the potential scalafix evaluation
-          val runScalafixAfterCompile =
-            scalafixOnCompile.value && !scalafixRunExplicitly.value
-          if (runScalafixAfterCompile)
-            scalafix
-              .toTask("")
-              .map(_ => oldCompile)
-          else Def.task(oldCompile)
-        }.value,
         // In some cases (I haven't been able to understand when/why, but this also happens for bgRunMain while
         // fgRunMain is fine), there is no specific streams attached to InputTasks, so  we they end up sharing the
         // global streams, causing issues for cache storage. This does not happen for Tasks, so we define a dummy one
@@ -180,7 +162,6 @@ object ScalafixPlugin extends AutoPlugin {
 
   override lazy val globalSettings: Seq[Def.Setting[_]] = Seq(
     scalafixConfig := None, // let scalafix-cli try to infer $CWD/.scalafix.conf
-    scalafixOnCompile := false,
     scalafixResolvers := Seq(
       Repository.ivy2Local(),
       Repository.central(),
@@ -354,7 +335,7 @@ object ScalafixPlugin extends AutoPlugin {
           scalafixResolvers.in(ThisBuild).value,
           projectDepsInternal
         )
-        val cachingRequested = scalafixCaching.or(scalafixOnCompile).value
+        val cachingRequested = scalafixCaching.value
         val maybeNoCache =
           if (shell.noCache || !cachingRequested) Seq(Arg.NoCache) else Nil
         val mainInterface = mainInterface0
@@ -566,7 +547,7 @@ object ScalafixPlugin extends AutoPlugin {
   // Controls whether scalafix should depend on compile (true) & whether compile may depend on
   // scalafix (false), to avoid cyclic dependencies causing deadlocks during executions (as
   // dependencies come from dynamic tasks).
-  private val scalafixRunExplicitly: Def.Initialize[Task[Boolean]] =
+  private[scalafix] val scalafixRunExplicitly: Def.Initialize[Task[Boolean]] =
     Def.task {
       executionRoots.value.exists { root =>
         Seq(scalafix.key, scalafixAll.key).contains(root.key)
