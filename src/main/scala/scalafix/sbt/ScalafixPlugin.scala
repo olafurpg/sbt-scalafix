@@ -45,7 +45,7 @@ object ScalafixPlugin extends AutoPlugin {
 
     val scalafixCaching: SettingKey[Boolean] =
       settingKey[Boolean](
-        "Cache scalafix invocations (off by default, on if scalafixOnCompile := true)."
+        "Cache scalafix invocations (off by default)."
       )
 
     import scala.language.implicitConversions
